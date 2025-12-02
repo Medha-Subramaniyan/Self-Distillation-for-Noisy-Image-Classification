@@ -17,7 +17,7 @@
 % as long as the \iclrfinalcopy macro remains commented out below.
 % Non-anonymous submissions will be rejected without review.
 
-\author{[Your Name]\thanks{Course: CAI-4105 -- Current Topics in Machine Learning. Instructor: Prof.~Shahana Ibrahim. Date: December 2025.}\\
+\author{Medha Subramaniyan\thanks{Course: CAI-4105 -- Current Topics in Machine Learning. Instructor: Prof.~Shahana Ibrahim. Date: December 2025.}\\
 Department of Electrical and Computer Engineering\\
 University of Central Florida\\
 Orlando, FL, USA\\
@@ -30,6 +30,26 @@ Orlando, FL, USA\\
 %\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
 \begin{document}
 
+% Center the title
+\makeatletter
+\renewcommand{\@maketitle}{%
+  \newpage
+  \null
+  \vskip 2em%
+  \begin{center}%
+  \let \footnote \thanks
+    {\LARGE \@title \par}%
+    \vskip 1.5em%
+    {\large
+      \lineskip .5em%
+      \begin{tabular}[t]{c}%
+        \@author
+      \end{tabular}\par}%
+    \vskip 1em%
+  \end{center}%
+  \par
+  \vskip 1.5em}
+\makeatother
 
 \maketitle
 
@@ -179,6 +199,7 @@ Hyperparameter sweeps reveal that NASD is reasonably robust to hyperparameter ch
 
 Future work could explore extending NASD to larger datasets and more complex architectures, developing more sophisticated confidence estimators that incorporate additional signals (e.g., prediction entropy, gradient magnitudes), and combining NASD with sample selection methods for hybrid approaches. Additionally, theoretical analysis of the convergence properties and noise robustness guarantees of the method would strengthen the understanding of its behavior under various noise conditions.
 
+\newpage
 
 \bibliography{iclr2026_conference}
 \bibliographystyle{iclr2026_conference}
