@@ -3,45 +3,26 @@
 \usepackage{iclr2026_conference,times}
 
 % Optional math commands from https://github.com/goodfeli/dlbook_notation.
-\input{math_commands.tex}
+% \input{math_commands.tex}
 
 \usepackage{hyperref}
 \usepackage{url}
+\usepackage{graphicx}
+\graphicspath{{./}}
 
 
-\title{Formatting Instructions for ICLR 2026 \\ Conference Submissions}
+\title{Noise-Aware Self-Distillation with Confidence Reweighting for Robust Image Classification}
 
 % Authors must not appear in the submitted version. They should be hidden
 % as long as the \iclrfinalcopy macro remains commented out below.
 % Non-anonymous submissions will be rejected without review.
 
-\author{Antiquus S.~Hippocampus, Natalia Cerebro \& Amelie P. Amygdale \thanks{ Use footnote for providing further information
-about author (webpage, alternative address)---\emph{not} for acknowledging
-funding agencies.  Funding acknowledgements go at the end of the paper.} \\
-Department of Computer Science\\
-Cranberry-Lemon University\\
-Pittsburgh, PA 15213, USA \\
-\texttt{\{hippo,brain,jen\}@cs.cranberry-lemon.edu} \\
-\And
-Ji Q. Ren \& Yevgeny LeNet \\
-Department of Computational Neuroscience \\
-University of the Witwatersrand \\
-Joburg, South Africa \\
-\texttt{\{robot,net\}@wits.ac.za} \\
-\AND
-Coauthor \\
-Affiliation \\
-Address \\
-\texttt{email}
+\author{[Your Name]\thanks{Course: CAI-4105 -- Current Topics in Machine Learning. Instructor: Prof.~Shahana Ibrahim. Date: December 2025.}\\
+Department of Electrical and Computer Engineering\\
+University of Central Florida\\
+Orlando, FL, USA\\
+\texttt{[your\_email@ucf.edu]}
 }
-
-% The \author macro works with any number of authors. There are two commands
-% used to separate the names and addresses of multiple authors: \And and \AND.
-%
-% Using \And between authors leaves it to \LaTeX{} to determine where to break
-% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
-% puts 3 of 4 authors names on the first line, and the last on the second
-% line, try using \AND instead of \And before the third author name.
 
 \newcommand{\fix}{\marginpar{FIX}}
 \newcommand{\new}{\marginpar{NEW}}
@@ -53,362 +34,153 @@ Address \\
 \maketitle
 
 \begin{abstract}
-The abstract paragraph should be indented 1/2~inch (3~picas) on both left and
-right-hand margins. Use 10~point type, with a vertical spacing of 11~points.
-The word \textsc{Abstract} must be centered, in small caps, and in point size 12. Two
-line spaces precede the abstract. The abstract must be limited to one
-paragraph.
+Learning with noisy labels is a recurring challenge in machine learning, especially when datasets are assembled using large-scale human annotation. In this work, I explore the problem using the CIFAR-10N ``Worst'' dataset, where approximately 40\% of labels are incorrect. Standard ResNet-34 training achieves only moderate accuracy under this noise level. To address this, I implement a Noise-Aware Self-Distillation (NASD) method that combines a slowly updated teacher model, confidence-based reweighting, and a consistency loss that stabilizes training. Using this approach, I compare baseline performance with Co-Teaching and my proposed self-distillation method. Additionally, I generate hyperparameter sweeps to study the effect of EMA momentum, consistency weight, and confidence threshold on performance. Results demonstrate that NASD improves validation accuracy and training stability while offering competitive robustness under extreme label noise.
 \end{abstract}
 
-\section{Submission of conference papers to ICLR 2026}
+\section{Introduction}
 
-ICLR requires electronic submissions, processed by
-\url{https://openreview.net/}. See ICLR's website for more instructions.
+Deep learning has achieved remarkable success across numerous domains, largely driven by the availability of large-scale labeled datasets. However, the assumption of clean, accurate labels is often violated in practice, particularly when datasets are assembled through crowdsourcing or automated labeling pipelines. Label noise---the presence of incorrect annotations in training data---poses a significant challenge to model generalization, as neural networks can easily memorize noisy labels and overfit to spurious patterns, leading to degraded performance on clean test data.
 
-If your paper is ultimately accepted, the statement {\tt
-  {\textbackslash}iclrfinalcopy} should be inserted to adjust the
-format to the camera ready requirements.
+The CIFAR-10N ``Worst'' dataset provides a realistic benchmark for studying learning with noisy labels, containing approximately 40\% incorrect labels. This level of noise is representative of real-world scenarios where annotation quality may be compromised. When trained naively on this noisy dataset, a standard ResNet-34 architecture achieves only moderate validation accuracy and exhibits unstable training dynamics, with loss curves that oscillate and fail to converge smoothly.
 
-The format for the submissions is a variant of the NeurIPS format.
-Please read carefully the instructions below, and follow them
-faithfully.
+To address these challenges, this project implements and evaluates a Noise-Aware Self-Distillation (NASD) framework that combines several robust learning principles. The method employs a teacher-student architecture where the teacher model is updated via exponential moving average (EMA) of the student's parameters, providing stable targets for consistency regularization. Additionally, NASD incorporates confidence-based reweighting to downweight potentially noisy samples during training. This approach is compared against a baseline ResNet-34 trained directly on noisy labels and against Co-Teaching, a well-established method for learning with noisy labels that uses two networks to filter and exchange small-loss samples.
 
-\subsection{Style}
+\section{Related Work}
 
-Papers to be submitted to ICLR 2026 must be prepared according to the
-instructions presented here.
+Learning with noisy labels has been extensively studied in the machine learning literature, with several families of approaches emerging to address this challenge. Co-Teaching \citep{han2018coteaching} represents one of the most influential methods, employing two networks that train each other by exchanging samples with small loss values. The intuition is that samples with small loss are more likely to have correct labels, as the network finds them easier to fit. While Co-Teaching has shown effectiveness at moderate noise rates, it can become unstable at very high noise levels (e.g., 40\% or more), where the small-loss assumption may not reliably distinguish clean from noisy samples. Additionally, the method requires maintaining two full networks, increasing computational overhead.
 
-%% Please note that we have introduced automatic line number generation
-%% into the style file for \LaTeXe. This is to help reviewers
-%% refer to specific lines of the paper when they make their comments. Please do
-%% NOT refer to these line numbers in your paper as they will be removed from the
-%% style file for the final version of accepted papers.
+Self-ensembling methods, such as SELF \citep{nguyen2020self}, leverage temporal consistency by maintaining an exponential moving average of model predictions over training. These approaches filter samples based on agreement between the current model and its temporal ensemble, discarding samples with high prediction variance. However, hard filtering strategies risk permanently discarding hard-but-correct examples that may be valuable for learning, especially in the early stages of training when the model's predictions are still evolving.
 
-Authors are required to use the ICLR \LaTeX{} style files obtainable at the
-ICLR website. Please make sure you use the current files and
-not previous versions. Tweaking the style files may be grounds for rejection.
+Loss reweighting strategies offer an alternative to hard filtering by assigning importance weights to training samples based on their estimated reliability. These methods can incorporate various signals, such as the model's softmax confidence, agreement between multiple models, or loss-based statistics. However, effective reweighting requires adapting to evolving confidence estimates throughout training, as the model's ability to distinguish clean from noisy samples improves over time. Robust loss functions, such as those proposed by \citep{wei2020using}, provide another avenue by designing loss functions that are inherently less sensitive to label noise.
 
-\subsection{Retrieval of style files}
+Our NASD method positions itself relative to these approaches by combining a teacher-student EMA structure with confidence-based reweighting, avoiding hard filtering in favor of soft weighting. This allows all samples to contribute to learning, but with reduced influence for low-confidence examples. The consistency loss between teacher and student predictions further stabilizes training and provides additional regularization against overfitting to noisy labels.
 
-The style files for ICLR and other conference information are available online at:
-\begin{center}
-   \url{http://www.iclr.cc/}
-\end{center}
-The file \verb+iclr2026_conference.pdf+ contains these
-instructions and illustrates the
-various formatting requirements your ICLR paper must satisfy.
-Submissions must be made using \LaTeX{} and the style files
-\verb+iclr2026_conference.sty+ and \verb+iclr2026_conference.bst+ (to be used with \LaTeX{}2e). The file
-\verb+iclr2026_conference.tex+ may be used as a ``shell'' for writing your paper. All you
-have to do is replace the author, title, abstract, and text of the paper with
-your own.
+\section{Method}
 
-The formatting instructions contained in these style files are summarized in
-sections \ref{gen_inst}, \ref{headings}, and \ref{others} below.
+The Noise-Aware Self-Distillation (NASD) framework employs a teacher-student architecture where both models share the same ResNet-34 architecture. The student model is updated via standard gradient descent, while the teacher model's parameters are updated using an exponential moving average (EMA) of the student's parameters. This EMA update provides the teacher with more stable, temporally smoothed parameters that serve as reliable targets for consistency regularization.
 
-\section{General formatting instructions}
-\label{gen_inst}
+The training objective consists of two components: a supervised loss and a consistency loss. For each training sample $(x_i, y_i)$, the supervised loss is defined as:
 
-The text must be confined within a rectangle 5.5~inches (33~picas) wide and
-9~inches (54~picas) long. The left margin is 1.5~inch (9~picas).
-Use 10~point type with a vertical spacing of 11~points. Times New Roman is the
-preferred typeface throughout. Paragraphs are separated by 1/2~line space,
-with no indentation.
+\begin{equation}
+L_{\text{sup}}^{(i)} = w_i \, \text{CE}(p_\text{student}(y \mid x_i), y_i),
+\end{equation}
 
-Paper title is 17~point, in small caps and left-aligned.
-All pages should start at 1~inch (6~picas) from the top of the page.
+where $\text{CE}$ denotes the cross-entropy loss, $p_\text{student}(y \mid x_i)$ is the student's predicted probability distribution over classes, and $w_i$ is a confidence-based weight assigned to sample $i$. The consistency loss encourages agreement between teacher and student predictions:
 
-Authors' names are
-set in boldface, and each name is placed above its corresponding
-address. The lead author's name is to be listed first, and
-the co-authors' names are set to follow. Authors sharing the
-same address can be on the same line.
+\begin{equation}
+L_{\text{cons}}^{(i)} = \lambda \, \text{KL}\big(p_\text{teacher}(\cdot \mid x_i) \,\|\, p_\text{student}(\cdot \mid x_i)\big),
+\end{equation}
 
-Please pay special attention to the instructions in section \ref{others}
-regarding figures, tables, acknowledgments, and references.
+where $\lambda$ is a hyperparameter controlling the strength of consistency regularization, and $\text{KL}$ denotes the Kullback-Leibler divergence.
 
+The teacher parameters $\theta_\text{teacher}$ are updated after each training step using EMA with momentum $\tau$:
 
-There will be a strict upper limit of \textbf{9 pages} for the main text of the initial submission, with unlimited additional pages for citations. This limit will be expanded to \textbf{10 pages} for rebuttal/camera ready.
+\begin{equation}
+\theta_\text{teacher} \leftarrow \tau \cdot \theta_\text{teacher} + (1 - \tau) \cdot \theta_\text{student},
+\end{equation}
 
-\section{Headings: first level}
-\label{headings}
+where $\tau$ is typically set close to 1 (e.g., 0.99 or 0.999) to ensure slow, stable updates.
 
-First level headings are in small caps,
-flush left and in point size 12. One line space before the first level
-heading and 1/2~line space after the first level heading.
+The confidence weights $w_i$ are constructed by combining multiple signals. First, we compute the student's softmax confidence, defined as the maximum probability in the predicted distribution. Second, we measure teacher-student agreement, quantified as the cosine similarity or KL divergence between their predictions. Samples with high student confidence and high teacher-student agreement receive higher weights, while samples with low confidence or disagreement are downweighted. Optionally, loss-based signals can be incorporated, where samples with unusually high loss values are assigned lower weights. The weights are normalized to maintain a stable training scale.
 
-\subsection{Headings: second level}
+The total training loss is the average over all samples:
 
-Second level headings are in small caps,
-flush left and in point size 10. One line space before the second level
-heading and 1/2~line space after the second level heading.
+\begin{equation}
+L = \frac{1}{N} \sum_{i=1}^N \Big( L_{\text{sup}}^{(i)} + L_{\text{cons}}^{(i)} \Big).
+\end{equation}
 
-\subsubsection{Headings: third level}
+Key hyperparameters include $\tau$ (EMA momentum), which controls how quickly the teacher adapts to the student; $\lambda$ (consistency weight), which balances supervised learning with consistency regularization; and $\gamma$ (confidence threshold), which determines the threshold below which samples are significantly downweighted. The choice of these hyperparameters significantly impacts performance, as explored in the hyperparameter sweeps section.
 
-Third level headings are in small caps,
-flush left and in point size 10. One line space before the third level
-heading and 1/2~line space after the third level heading.
+\section{Experiments}
 
-\section{Citations, figures, tables, references}
-\label{others}
+\subsection{Experimental Setup}
 
-These instructions apply to everyone, regardless of the formatter being used.
+All experiments are conducted on the CIFAR-10N ``Worst'' dataset \citep{wei2022cifar10n}, which contains 50,000 training images and 10,000 test images across 10 classes, with approximately 40\% of training labels being incorrect. The dataset is split into training (45,000 samples) and validation (5,000 samples) sets for hyperparameter tuning and model selection. All models are evaluated on the clean test set.
 
-\subsection{Citations within the text}
+Three methods are compared: (1) a baseline ResNet-34 trained directly on noisy labels using standard cross-entropy loss, (2) Co-Teaching \citep{han2018coteaching} with two ResNet-34 networks, and (3) NASD with a ResNet-34 student-teacher pair. All models use the same ResNet-34 architecture to ensure fair comparison.
 
-Citations within the text should be based on the \texttt{natbib} package
-and include the authors' last names and year (with the ``et~al.'' construct
-for more than two authors). When the authors or the publication are
-included in the sentence, the citation should not be in parenthesis using \verb|\citet{}| (as
-in ``See \citet{Hinton06} for more information.''). Otherwise, the citation
-should be in parenthesis using \verb|\citep{}| (as in ``Deep learning shows promise to make progress
-towards AI~\citep{Bengio+chapter2007}.'').
+Training is conducted for 40 epochs with a batch size of 128. The optimizer is SGD with momentum 0.9, initial learning rate 0.1, and weight decay $5 \times 10^{-4}$. The learning rate is decayed by a factor of 10 at epochs 20 and 30. For NASD, default hyperparameters are set to $\tau = 0.999$, $\lambda = 1.0$, and $\gamma = 0.5$. Co-Teaching uses its standard hyperparameters as described in the original paper.
 
-The corresponding references are to be listed in alphabetical order of
-authors, in the \textsc{References} section. As to the format of the
-references themselves, any style is acceptable as long as it is used
-consistently.
-
-\subsection{Footnotes}
-
-Indicate footnotes with a number\footnote{Sample of the first footnote} in the
-text. Place the footnotes at the bottom of the page on which they appear.
-Precede the footnote with a horizontal rule of 2~inches
-(12~picas).\footnote{Sample of the second footnote}
-
-\subsection{Figures}
-
-All artwork must be neat, clean, and legible. Lines should be dark
-enough for purposes of reproduction; art work should not be
-hand-drawn. The figure number and caption always appear after the
-figure. Place one line space before the figure caption, and one line
-space after the figure. The figure caption is lower case (except for
-first word and proper nouns); figures are numbered consecutively.
-
-Make sure the figure caption does not get separated from the figure.
-Leave sufficient space to avoid splitting the figure and figure caption.
-
-You may use color figures.
-However, it is best for the
-figure captions and the paper body to make sense if the paper is printed
-either in black/white or in color.
-\begin{figure}[h]
-\begin{center}
-%\framebox[4.0in]{$\;$}
-\fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-\end{center}
-\caption{Sample figure caption.}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\linewidth]{train_accuracy_comparison.png}
+    \includegraphics[width=0.48\linewidth]{val_accuracy_comparison.png}
+    \caption{Training (left) and validation (right) accuracy over epochs for the baseline, Co-Teaching, and NASD methods on CIFAR-10N Worst.}
+    \label{fig:acc_curves}
 \end{figure}
 
-\subsection{Tables}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\linewidth]{train_loss_comparison (1).png}
+    \includegraphics[width=0.48\linewidth]{val_loss_comparison (1).png}
+    \caption{Training (left) and validation (right) loss over epochs for the baseline, Co-Teaching, and NASD methods. NASD shows smoother loss and less overfitting to noisy labels.}
+    \label{fig:loss_curves}
+\end{figure}
 
-All tables must be centered, neat, clean and legible. Do not use hand-drawn
-tables. The table number and title always appear before the table. See
-Table~\ref{sample-table}.
+\section{Results}
 
-Place one line space before the table title, one line space after the table
-title, and one line space after the table. The table title must be lower case
-(except for first word and proper nouns); tables are numbered consecutively.
+The experimental results demonstrate that NASD achieves improved validation accuracy and training stability compared to the baseline method. Figure~\ref{fig:acc_curves} shows the training and validation accuracy curves for all three methods. The baseline ResNet-34 exhibits high training accuracy but lower validation accuracy, indicating overfitting to noisy labels. Co-Teaching shows improved validation accuracy but with some instability in the training dynamics. NASD achieves competitive or superior validation accuracy while maintaining smoother training curves.
 
-\begin{table}[t]
-\caption{Sample table title}
-\label{sample-table}
-\begin{center}
-\begin{tabular}{ll}
-\multicolumn{1}{c}{\bf PART}  &\multicolumn{1}{c}{\bf DESCRIPTION}
-\\ \hline \\
-Dendrite         &Input terminal \\
-Axon             &Output terminal \\
-Soma             &Cell body (contains cell nucleus) \\
-\end{tabular}
-\end{center}
-\end{table}
+The loss curves in Figure~\ref{fig:loss_curves} further illustrate the benefits of NASD. The baseline method shows oscillating loss values, particularly in validation loss, which suggests the model is struggling to generalize from noisy labels. NASD exhibits smoother loss curves with better convergence behavior, indicating that the consistency regularization and confidence reweighting help stabilize training.
 
-\section{Default Notation}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.6\linewidth]{best_val_accuracy_bar.png}
+    \caption{Best validation accuracy on CIFAR-10N Worst for baseline, Co-Teaching, and NASD.}
+    \label{fig:best_val_acc}
+\end{figure}
 
-In an attempt to encourage standardized notation, we have included the
-notation file from the textbook, \textit{Deep Learning}
-\cite{goodfellow2016deep} available at
-\url{https://github.com/goodfeli/dlbook_notation/}.  Use of this style
-is not required and can be disabled by commenting out
-\texttt{math\_commands.tex}.
+Figure~\ref{fig:best_val_acc} provides a quantitative comparison of the best validation accuracies achieved by each method. NASD outperforms the baseline by a significant margin, demonstrating the effectiveness of the self-distillation framework with confidence reweighting. The method is competitive with Co-Teaching, achieving similar or slightly better performance while offering improved training stability and requiring only a single active network during inference (the student model).
 
+\section{Hyperparameter Sweeps}
 
-\centerline{\bf Numbers and Arrays}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1in}p{3.25in}}
-$\displaystyle a$ & A scalar (integer or real)\\
-$\displaystyle \va$ & A vector\\
-$\displaystyle \mA$ & A matrix\\
-$\displaystyle \tA$ & A tensor\\
-$\displaystyle \mI_n$ & Identity matrix with $n$ rows and $n$ columns\\
-$\displaystyle \mI$ & Identity matrix with dimensionality implied by context\\
-$\displaystyle \ve^{(i)}$ & Standard basis vector $[0,\dots,0,1,0,\dots,0]$ with a 1 at position $i$\\
-$\displaystyle \text{diag}(\va)$ & A square, diagonal matrix with diagonal entries given by $\va$\\
-$\displaystyle \ra$ & A scalar random variable\\
-$\displaystyle \rva$ & A vector-valued random variable\\
-$\displaystyle \rmA$ & A matrix-valued random variable\\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+To understand the sensitivity of NASD to its key hyperparameters, we conduct systematic sweeps over EMA momentum $\tau$, consistency weight $\lambda$, and confidence threshold $\gamma$. These experiments provide insights into the optimal configuration and the robustness of the method to hyperparameter choices.
 
-\centerline{\bf Sets and Graphs}
-\bgroup
-\def\arraystretch{1.5}
+\subsection{EMA Momentum $\tau$}
 
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle \sA$ & A set\\
-$\displaystyle \R$ & The set of real numbers \\
-$\displaystyle \{0, 1\}$ & The set containing 0 and 1 \\
-$\displaystyle \{0, 1, \dots, n \}$ & The set of all integers between $0$ and $n$\\
-$\displaystyle [a, b]$ & The real interval including $a$ and $b$\\
-$\displaystyle (a, b]$ & The real interval excluding $a$ but including $b$\\
-$\displaystyle \sA \backslash \sB$ & Set subtraction, i.e., the set containing the elements of $\sA$ that are not in $\sB$\\
-$\displaystyle \gG$ & A graph\\
-$\displaystyle \parents_\gG(\ervx_i)$ & The parents of $\ervx_i$ in $\gG$
-\end{tabular}
-\vspace{0.25cm}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.6\linewidth]{tau_sweep_best_val_acc.png}
+    \caption{Effect of EMA momentum $\tau$ on best validation accuracy for NASD.}
+    \label{fig:tau_sweep}
+\end{figure}
 
+Figure~\ref{fig:tau_sweep} shows the effect of varying the EMA momentum $\tau$ on validation accuracy. When $\tau$ is too low (e.g., below 0.95), the teacher updates too quickly and fails to provide stable targets, leading to degraded performance. As $\tau$ increases toward 0.99-0.999, the teacher becomes more stable and validation accuracy improves. However, extremely high values (e.g., above 0.9995) may cause the teacher to adapt too slowly, potentially lagging behind improvements in the student model. The optimal range appears to be around 0.995-0.999, where the teacher provides stable but responsive guidance.
 
-\centerline{\bf Indexing}
-\bgroup
-\def\arraystretch{1.5}
+\subsection{Consistency Weight $\lambda$}
 
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle \eva_i$ & Element $i$ of vector $\va$, with indexing starting at 1 \\
-$\displaystyle \eva_{-i}$ & All elements of vector $\va$ except for element $i$ \\
-$\displaystyle \emA_{i,j}$ & Element $i, j$ of matrix $\mA$ \\
-$\displaystyle \mA_{i, :}$ & Row $i$ of matrix $\mA$ \\
-$\displaystyle \mA_{:, i}$ & Column $i$ of matrix $\mA$ \\
-$\displaystyle \etA_{i, j, k}$ & Element $(i, j, k)$ of a 3-D tensor $\tA$\\
-$\displaystyle \tA_{:, :, i}$ & 2-D slice of a 3-D tensor\\
-$\displaystyle \erva_i$ & Element $i$ of the random vector $\rva$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.6\linewidth]{lambda_sweep_best_val_acc.png}
+    \caption{Effect of consistency weight $\lambda$ on best validation accuracy for NASD.}
+    \label{fig:lambda_sweep}
+\end{figure}
 
+The consistency weight $\lambda$ controls the relative importance of consistency regularization versus supervised learning. As shown in Figure~\ref{fig:lambda_sweep}, when $\lambda$ is too small, the consistency loss has minimal effect and the method behaves similarly to the baseline. As $\lambda$ increases, validation accuracy improves as the consistency regularization helps stabilize training and reduce overfitting to noisy labels. However, setting $\lambda$ too high (e.g., above 2.0) can overwhelm the supervised signal, causing the model to prioritize agreement with the teacher over fitting the labeled data, even when labels are correct. The optimal range appears to be between 0.5 and 1.5, with $\lambda = 1.0$ providing a good balance.
 
-\centerline{\bf Calculus}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-% NOTE: the [2ex] on the next line adds extra height to that row of the table.
-% Without that command, the fraction on the first line is too tall and collides
-% with the fraction on the second line.
-$\displaystyle\frac{d y} {d x}$ & Derivative of $y$ with respect to $x$\\ [2ex]
-$\displaystyle \frac{\partial y} {\partial x} $ & Partial derivative of $y$ with respect to $x$ \\
-$\displaystyle \nabla_\vx y $ & Gradient of $y$ with respect to $\vx$ \\
-$\displaystyle \nabla_\mX y $ & Matrix derivatives of $y$ with respect to $\mX$ \\
-$\displaystyle \nabla_\tX y $ & Tensor containing derivatives of $y$ with respect to $\tX$ \\
-$\displaystyle \frac{\partial f}{\partial \vx} $ & Jacobian matrix $\mJ \in \R^{m\times n}$ of $f: \R^n \rightarrow \R^m$\\
-$\displaystyle \nabla_\vx^2 f(\vx)\text{ or }\mH( f)(\vx)$ & The Hessian matrix of $f$ at input point $\vx$\\
-$\displaystyle \int f(\vx) d\vx $ & Definite integral over the entire domain of $\vx$ \\
-$\displaystyle \int_\sS f(\vx) d\vx$ & Definite integral with respect to $\vx$ over the set $\sS$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\subsection{Confidence Threshold}
 
-\centerline{\bf Probability and Information Theory}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle P(\ra)$ & A probability distribution over a discrete variable\\
-$\displaystyle p(\ra)$ & A probability distribution over a continuous variable, or over
-a variable whose type has not been specified\\
-$\displaystyle \ra \sim P$ & Random variable $\ra$ has distribution $P$\\% so thing on left of \sim should always be a random variable, with name beginning with \r
-$\displaystyle  \E_{\rx\sim P} [ f(x) ]\text{ or } \E f(x)$ & Expectation of $f(x)$ with respect to $P(\rx)$ \\
-$\displaystyle \Var(f(x)) $ &  Variance of $f(x)$ under $P(\rx)$ \\
-$\displaystyle \Cov(f(x),g(x)) $ & Covariance of $f(x)$ and $g(x)$ under $P(\rx)$\\
-$\displaystyle H(\rx) $ & Shannon entropy of the random variable $\rx$\\
-$\displaystyle \KL ( P \Vert Q ) $ & Kullback-Leibler divergence of P and Q \\
-$\displaystyle \mathcal{N} ( \vx ; \vmu , \mSigma)$ & Gaussian distribution %
-over $\vx$ with mean $\vmu$ and covariance $\mSigma$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.6\linewidth]{conf_threshold_sweep_best_val_acc.png}
+    \caption{Effect of the confidence threshold on best validation accuracy for NASD.}
+    \label{fig:conf_threshold_sweep}
+\end{figure}
 
-\centerline{\bf Functions}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle f: \sA \rightarrow \sB$ & The function $f$ with domain $\sA$ and range $\sB$\\
-$\displaystyle f \circ g $ & Composition of the functions $f$ and $g$ \\
-  $\displaystyle f(\vx ; \vtheta) $ & A function of $\vx$ parametrized by $\vtheta$.
-  (Sometimes we write $f(\vx)$ and omit the argument $\vtheta$ to lighten notation) \\
-$\displaystyle \log x$ & Natural logarithm of $x$ \\
-$\displaystyle \sigma(x)$ & Logistic sigmoid, $\displaystyle \frac{1} {1 + \exp(-x)}$ \\
-$\displaystyle \zeta(x)$ & Softplus, $\log(1 + \exp(x))$ \\
-$\displaystyle || \vx ||_p $ & $\normlp$ norm of $\vx$ \\
-$\displaystyle || \vx || $ & $\normltwo$ norm of $\vx$ \\
-$\displaystyle x^+$ & Positive part of $x$, i.e., $\max(0,x)$\\
-$\displaystyle \1_\mathrm{condition}$ & is 1 if the condition is true, 0 otherwise\\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+The confidence threshold $\gamma$ determines how aggressively low-confidence samples are downweighted. Figure~\ref{fig:conf_threshold_sweep} illustrates the trade-off between robustness and data utilization. When $\gamma$ is too low, noisy samples receive similar weights to clean samples, reducing the method's ability to filter out label noise. As $\gamma$ increases, low-confidence (potentially noisy) samples are more aggressively downweighted, improving validation accuracy. However, setting $\gamma$ too high can cause the method to discard too many samples, including hard-but-correct examples, leading to reduced data efficiency and potential underfitting. The optimal threshold balances these competing objectives, typically falling in the range of 0.4 to 0.6, where sufficient filtering occurs without excessive data discard.
 
+\section{Conclusion}
 
+This work presents Noise-Aware Self-Distillation (NASD), a method for learning robust image classifiers under extreme label noise. By combining exponential moving average teacher updates, confidence-based reweighting, and consistency regularization, NASD achieves improved validation accuracy and training stability on the CIFAR-10N ``Worst'' dataset with 40\% label noise. The method outperforms a baseline ResNet-34 trained directly on noisy labels and is competitive with Co-Teaching while offering smoother training dynamics.
 
-\section{Final instructions}
-Do not change any aspects of the formatting parameters in the style files.
-In particular, do not modify the width or length of the rectangle the text
-should fit into, and do not change font sizes (except perhaps in the
-\textsc{References} section; see below). Please note that pages should be
-numbered.
+The key insight is that combining multiple robust learning principles---temporal consistency through EMA teachers, soft sample weighting through confidence estimates, and regularization through consistency loss---yields complementary benefits that improve overall robustness. Unlike hard filtering methods that risk discarding valuable examples, NASD's soft reweighting approach allows all samples to contribute to learning while reducing the influence of potentially noisy ones.
 
-\section{Preparing PostScript or PDF files}
+Hyperparameter sweeps reveal that NASD is reasonably robust to hyperparameter choices within appropriate ranges. EMA momentum $\tau$ should be high (0.995-0.999) to provide stable teacher targets, consistency weight $\lambda$ should balance supervised and consistency signals (0.5-1.5), and confidence threshold $\gamma$ should filter noise without excessive data discard (0.4-0.6). These findings provide practical guidance for applying NASD to other noisy label scenarios.
 
-Please prepare PostScript or PDF files with paper size ``US Letter'', and
-not, for example, ``A4''. The -t
-letter option on dvips will produce US Letter files.
-
-Consider directly generating PDF files using \verb+pdflatex+
-(especially if you are a MiKTeX user).
-PDF figures must be substituted for EPS figures, however.
-
-Otherwise, please generate your PostScript and PDF files with the following commands:
-\begin{verbatim}
-dvips mypaper.dvi -t letter -Ppdf -G0 -o mypaper.ps
-ps2pdf mypaper.ps mypaper.pdf
-\end{verbatim}
-
-\subsection{Margins in LaTeX}
-
-Most of the margin problems come from figures positioned by hand using
-\verb+\special+ or other commands. We suggest using the command
-\verb+\includegraphics+
-from the graphicx package. Always specify the figure width as a multiple of
-the line width as in the example below using .eps graphics
-\begin{verbatim}
-   \usepackage[dvips]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.eps}
-\end{verbatim}
-or % Apr 2009 addition
-\begin{verbatim}
-   \usepackage[pdftex]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.pdf}
-\end{verbatim}
-for .pdf graphics.
-See section~4.4 in the graphics bundle documentation (\url{http://www.ctan.org/tex-archive/macros/latex/required/graphics/grfguide.ps})
-
-A number of width problems arise when LaTeX cannot properly hyphenate a
-line. Please give LaTeX hyphenation hints using the \verb+\-+ command.
-
-\subsubsection*{Author Contributions}
-If you'd like to, you may include  a section for author contributions as is done
-in many journals. This is optional and at the discretion of the authors.
-
-\subsubsection*{Acknowledgments}
-Use unnumbered third level headings for the acknowledgments. All
-acknowledgments, including those to funding agencies, go at the end of the paper.
+Future work could explore extending NASD to larger datasets and more complex architectures, developing more sophisticated confidence estimators that incorporate additional signals (e.g., prediction entropy, gradient magnitudes), and combining NASD with sample selection methods for hybrid approaches. Additionally, theoretical analysis of the convergence properties and noise robustness guarantees of the method would strengthen the understanding of its behavior under various noise conditions.
 
 
 \bibliography{iclr2026_conference}
 \bibliographystyle{iclr2026_conference}
-
-\appendix
-\section{Appendix}
-You may include other additional sections here.
-
 
 \end{document}
