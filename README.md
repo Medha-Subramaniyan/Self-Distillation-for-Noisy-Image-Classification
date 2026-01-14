@@ -1,5 +1,4 @@
-# Noise-Aware Self-Distillation with Confidence
-Reweighting for Robust Image Classification
+# Noise-Aware Self-Distillation with Confidence Reweighting for Robust Image Classification
 
 This project compares three different approaches for training deep neural networks on noisy labeled data using the CIFAR-10N dataset. The methods evaluated are:
 
